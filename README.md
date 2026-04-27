@@ -12,3 +12,4 @@ Please note, that the signal processing might be better performed using Python l
 
 The source code is deliberately crammed into a as few files as possible. I would encourage anyone planning on using this to creae sepatarte pages for connection, settings, graphs, etc. 
 
+# telemonitoring_project
