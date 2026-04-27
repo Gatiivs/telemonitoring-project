@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:CortriumBLE;assembly=CortriumBLE"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.Maui;assembly=LiveChartsCore.SkiaSharpView.Maui"
+             x:Class="CortriumBLE.MainPage">
+    <ContentPage.Content>
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="30,0"
+            Spacing="25">
+
+            <Label
+                Text="{Binding Information}"
+                Style="{StaticResource SubHeadline}"
+                SemanticProperties.HeadingLevel="Level2"
+                SemanticProperties.Description="Welcome to dot net Multi platform App U I" />
+
+            <!-- Add a ListView to display the discovered devices -->
+            <ListView x:Name="DeviceListView" ItemsSource="{Binding DeviceList}" ItemTapped="DeviceListView_ItemTapped" BackgroundColor="LightBlue">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <TextCell Text="{Binding Name}" TextColor="DarkBlue"/>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+                
+            </ListView>
+            
+            <Button
+                x:Name="SearchBtn"
+                Text="Search for Cortrium C3 Devices and Connect to First" 
+                SemanticProperties.Hint="Searches for all Cortrium Devices - and auto connects"
+                Clicked="OnCounterClicked"
+                HorizontalOptions="Fill" />
+                <!--<lvc:CartesianChart Margin="5" x:Name="ECGChart1"  HeightRequest="300" Series="{Binding Series}"></lvc:CartesianChart>-->
+                <HorizontalStackLayout HorizontalOptions="Center">
+                    <Label Text="{Binding HeartRate}" Margin="10" FontSize="Large" HorizontalOptions="Center"  ToolTipProperties.Text="Heart Rate (BPM)"/>
+
+                    <Label Text="{Binding Slope}" Margin="10" FontSize="Large" TextColor="LightGray" HorizontalOptions="Center"  ToolTipProperties.Text="Signal Regression (%)"/>
+                    <Label Text="{Binding SlopePeak}" Margin="10" FontSize="Large" TextColor="NavajoWhite" HorizontalOptions="Center" ToolTipProperties.Text="Peak Size Regression (%)"/>
+                    <Label Text="{Binding CSI}" Margin="10" FontSize="Large" TextColor="LightPink" HorizontalOptions="Center" ToolTipProperties.Text="Cardiac Sympathetic Index (CSI) Slope" />
+                    <Label Text="{Binding MaxCSI}" Margin="10" FontSize="Large" TextColor="LightCoral" HorizontalOptions="Center" ToolTipProperties.Text="Max CSI Index"/>
+
+
+                </HorizontalStackLayout>
+                <lvc:CartesianChart Margin="5" x:Name="ECGChart"  HeightRequest="300" WidthRequest="800" Series="{Binding Series}"></lvc:CartesianChart>
+                
+
+            </VerticalStackLayout>
+    </ScrollView>
+    </ContentPage.Content>
+</ContentPage>
