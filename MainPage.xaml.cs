@@ -60,6 +60,8 @@ namespace CortriumBLE
         private readonly DateTimeAxis _customAxis;
         private ObservableCollection<ISeries> _series;
 
+        private AccelerometerService accelerometerService;
+
         public ObservableCollection<ISeries> Series
         {
             get => _series;
