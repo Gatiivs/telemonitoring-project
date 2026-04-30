@@ -35,7 +35,7 @@ public class AccelerometerService
             X = data.X,
             Y = data.Y,
             Z = data.Z,
-            Timestamp = DateTime.Now
+            Timestamp = DateTime.UtcNow
         };
 
         lock (_lock)
@@ -54,6 +54,8 @@ public class AccelerometerService
         }
     }
 
+
+    //we can remove these 2 later
     public void ReadData()
     {
         var batch = GetBatchAndClear();
@@ -69,6 +71,7 @@ public class AccelerometerService
         Console.WriteLine($"Sender {data.Count} målinger til database...");
     }
 }
+    //
 
 public class AccelerometerData
 {
