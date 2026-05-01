@@ -1,4 +1,4 @@
-﻿//using Android.AdServices.Common;
+    ﻿//using Android.AdServices.Common;
 using CortriumBLE.Cortrium;
 using Plugin.BLE;
 using Plugin.BLE.Abstractions;
@@ -59,6 +59,9 @@ namespace CortriumBLE
 
         private readonly DateTimeAxis _customAxis;
         private ObservableCollection<ISeries> _series;
+
+        private readonly string patientId = "P001";
+        private readonly string currentSessionId = Guid.NewGuid().ToString();
 
         public ObservableCollection<ISeries> Series
         {
@@ -391,6 +394,33 @@ namespace CortriumBLE
             {
                 Cortrium.ECGBatchData ecgData = decoder.DecodeBytes(Array.ConvertAll(e, x => (sbyte)x));
 
+                var packetId = Guid.NewGuid().ToString();
+                var deviceId = C3Device?.Id.ToString() ?? "UnknownDevice";
+                var startTime = DateTime.UtcNow;
+
+                var rawSamples = new List<EcgRawSample>();
+
+                for (int i = 0; i < ecgData.ECGChannel1.Length; i++)
+                {
+                    rawSamples.Add(new EcgRawSample
+                    {
+                        PatientId = patientId,
+                        DeviceId = deviceId,
+                        SessionId = currentSessionId,
+                        PacketId = packetId,
+                        SampleIndex = i,
+                        RecordedAt = startTime.AddMilliseconds(i * 1000.0 / 256.0),
+
+                        EcgChannel1 = ecgData.ECGChannel1.Length > i ? ecgData.ECGChannel1[i] : null,
+                        EcgChannel2 = ecgData.ECGChannel2.Length > i ? ecgData.ECGChannel2[i] : null,
+                        EcgChannel3 = ecgData.ECGChannel3.Length > i ? ecgData.ECGChannel3[i] : null
+                    });
+                }
+
+                if (ecgWriter != null && rawSamples.Count > 0)
+                {
+                    await ecgWriter.WriteEcgRawBatchAsync(rawSamples); //save the raw samples
+                }
 
                 //var combinedDataList = Enumerable.Range(0, ecgData.ECGChannel1.Length)
                 //    .Where(index => index % 4 == 0) //Downsample to 64 Hz to avoid overloading the app
@@ -406,14 +436,28 @@ namespace CortriumBLE
                 //     .Select(Convert.ToInt32)
                 //
 
+                //keep this to mae the screen work
                 int ecg1 = (ecgData.ECGChannel1[0] + ecgData.ECGChannel1[1] + ecgData.ECGChannel1[2] + ecgData.ECGChannel1[3] + ecgData.ECGChannel1[4] + ecgData.ECGChannel1[5]) / 6;
                 int ecg3 = (ecgData.ECGChannel1[6] + ecgData.ECGChannel1[7] + ecgData.ECGChannel1[8] + ecgData.ECGChannel1[9] + ecgData.ECGChannel1[10] + ecgData.ECGChannel1[11]) / 6;
 
                 //                for (int k = 0; k < combinedDataList.Count; k++)
                 {
                     //await ecgWriter.WriteEcgValueAsync(combinedDataList[k]);
-                    if (ecgWriter != null)
-                        await ecgWriter.WriteEcgValueAsync(ecg1);
+                    //if (ecgWriter != null)
+                        //await ecgWriter.WriteEcgValueAsync(ecg1);
+
+                    //accelerometer sends data here
+                    var accelBatch = accelerometerService.GetBatchAndClear();
+
+                    if (accelBatch.Count > 0 && ecgWriter != null)
+                    {
+                        await ecgWriter.WriteAccelerometerBatchAsync(
+                            accelBatch,
+                            patientId,
+                            currentSessionId,
+                            C3Device?.Id.ToString() ?? "UnknownDevice"
+                        );
+                    }
 
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
