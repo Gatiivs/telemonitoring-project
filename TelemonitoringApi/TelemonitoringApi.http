@@ -1,0 +1,6 @@
+@TelemonitoringApi_HostAddress = http://localhost:5239
+
+GET {{TelemonitoringApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
