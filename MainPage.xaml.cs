@@ -60,6 +60,11 @@ namespace CortriumBLE
         private readonly DateTimeAxis _customAxis;
         private ObservableCollection<ISeries> _series;
 
+        private readonly string patientId = "P001";
+        private readonly string currentSessionId = Guid.NewGuid().ToString();
+
+        private AccelerometerService accelerometerService;
+
         public ObservableCollection<ISeries> Series
         {
             get => _series;
@@ -168,6 +173,8 @@ namespace CortriumBLE
             InitializeComponent();
 
             BindingContext = this;
+            
+            accelerometerService = new AccelerometerService();
 
             Information = "Press Button to Start Search";
 
@@ -378,6 +385,9 @@ namespace CortriumBLE
             this.PublishData += ReadData;
 
             await this.ReadDataAsync();
+
+            //start accelerometer here:
+            accelerometerService.ToggleAccelerometer();
         }
 
         private void Adapter_DeviceConnected(object? sender, DeviceEventArgs e)
@@ -414,6 +424,19 @@ namespace CortriumBLE
                     //await ecgWriter.WriteEcgValueAsync(combinedDataList[k]);
                     if (ecgWriter != null)
                         await ecgWriter.WriteEcgValueAsync(ecg1);
+
+                    // GET accelerometer batch
+                    var accelBatch = accelerometerService.GetBatchAndClear();
+
+                    if (accelBatch.Count > 0 && ecgWriter != null)
+                    {
+                       await ecgWriter.WriteAccelerometerBatchAsync(
+                            accelBatch,
+                            patientId,
+                            currentSessionId,
+                            C3Device?.Id.ToString() ?? "UnknownDevice"
+                        );
+                    }
 
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
