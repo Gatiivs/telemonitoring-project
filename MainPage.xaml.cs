@@ -19,6 +19,8 @@ using CortriumBLE.SignalProcessing;
 using System.Linq.Expressions;
 //using Windows.ApplicationModel.Background;
 
+using MySqlConnector;
+
 namespace CortriumBLE
 {
 
@@ -34,6 +36,9 @@ namespace CortriumBLE
     public partial class MainPage : ContentPage, INotifyPropertyChanged
     {
         int count = 0;
+
+        private string sessionId = Guid.NewGuid().ToString();
+        private List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(DateTime, int, double, double, double)>();
 
         public IBluetoothLE bluetoothLE { get; private set; }
         public IAdapter adapter { get; private set; }
@@ -254,6 +259,7 @@ namespace CortriumBLE
         }
         private  void OnCounterClicked(object sender, EventArgs e)
         {
+            sessionId = Guid.NewGuid().ToString();
 
             //_values.Clear(); // Clear old values
             //_values.AddRange(GenerateSampleData(10)); // Generate new data
@@ -421,6 +427,28 @@ namespace CortriumBLE
                             //Console.WriteLine($"Data: ECGChannel1: {ecgData.ECGChannel1[k]}, ECGChannel2: {ecgData.ECGChannel2[k]}, ECGChannel3: {ecgData.ECGChannel3[k]}");
                             Console.WriteLine($"Data ECG1: {ecg1}");
                             // Add each new point with a timestamp based on 256 Hz sample rate
+
+
+                            //insert data into database
+                            ecgBuffer.Add((
+                            sessionId,
+                            DateTime.UtcNow,
+                            ecg1,
+                            HeartRate,
+                            CSI,
+                            ModCSI
+                        ));
+
+                        if (ecgBuffer.Count >= 50) // hopefully batching in portions of 50 will fix it
+                        {
+                            var batchToSend = new List<(string, DateTime, int, double, double, double)>(ecgBuffer);
+                            ecgBuffer.Clear();
+
+                            _ = InsertBatchAsync(batchToSend);
+                        }   
+
+
+
                             var pointTime = DateTime.Now; //.AddMilliseconds(3.9); // Rough interval for 256  is 3.9 - but for downsampling by 4 - it must be 3.9*4 = 15.6Hz
 
                             _values.Add(new DateTimePoint(pointTime, ecg1));
@@ -590,6 +618,51 @@ namespace CortriumBLE
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
+
+        //In real life NEVER hardcode your credentials in code and EVEN MORE NEVER send them over the web like that. 
+        //but we have a free package and this is just a demonstration so we wont care this time. 
+        private async Task InsertBatchAsync(List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> batch)
+        {
+            try
+            {
+                var connectionString =
+                    "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
+                    "Database=telemonitoring;" +
+                    "User=admin;" +
+                    "Password=telemonitoring123;";
+
+                using var connection = new MySqlConnector.MySqlConnection(connectionString);
+                await connection.OpenAsync();
+
+                using var cmd = connection.CreateCommand();
+
+                var values = new List<string>();
+
+                for (int i = 0; i < batch.Count; i++)
+                {
+                    values.Add($"(@ts{i}, @ecg{i}, @hr{i}, @csi{i}, @mod{i})");
+
+                    cmd.Parameters.AddWithValue($"@ts{i}", batch[i].ts);
+                    cmd.Parameters.AddWithValue($"@ecg{i}", batch[i].ecg);
+                    cmd.Parameters.AddWithValue($"@hr{i}", batch[i].hr);
+                    cmd.Parameters.AddWithValue($"@csi{i}", batch[i].csi);
+                    cmd.Parameters.AddWithValue($"@mod{i}", batch[i].modcsi);
+                }
+
+                cmd.CommandText = $@"
+                    INSERT INTO ecg_data 
+                    (timestamp, ecg_value, heart_rate, csi, mod_csi)
+                    VALUES {string.Join(",", values)}";
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Batch insert error: " + ex.Message);
+            }
+        }
+
 
     }
 
