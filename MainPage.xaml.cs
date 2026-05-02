@@ -37,7 +37,8 @@ namespace CortriumBLE
     {
         int count = 0;
 
-        private List<(DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(DateTime, int, double, double, double)>();
+        private string sessionId = Guid.NewGuid().ToString();
+        private List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(DateTime, int, double, double, double)>();
 
         public IBluetoothLE bluetoothLE { get; private set; }
         public IAdapter adapter { get; private set; }
@@ -258,6 +259,7 @@ namespace CortriumBLE
         }
         private  void OnCounterClicked(object sender, EventArgs e)
         {
+            sessionId = Guid.NewGuid().ToString();
 
             //_values.Clear(); // Clear old values
             //_values.AddRange(GenerateSampleData(10)); // Generate new data
@@ -429,6 +431,7 @@ namespace CortriumBLE
 
                             //insert data into database
                             ecgBuffer.Add((
+                            sessionId,
                             DateTime.UtcNow,
                             ecg1,
                             HeartRate,
@@ -438,7 +441,7 @@ namespace CortriumBLE
 
                         if (ecgBuffer.Count >= 50) // hopefully batching in portions of 50 will fix it
                         {
-                            var batchToSend = new List<(DateTime, int, double, double, double)>(ecgBuffer);
+                            var batchToSend = new List<(string, DateTime, int, double, double, double)>(ecgBuffer);
                             ecgBuffer.Clear();
 
                             _ = InsertBatchAsync(batchToSend);
@@ -619,7 +622,7 @@ namespace CortriumBLE
 
         //In real life NEVER hardcode your credentials in code and EVEN MORE NEVER send them over the web like that. 
         //but we have a free package and this is just a demonstration so we wont care this time. 
-        private async Task InsertBatchAsync(List<(DateTime ts, int ecg, double hr, double csi, double modcsi)> batch)
+        private async Task InsertBatchAsync(List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> batch)
         {
             try
             {
