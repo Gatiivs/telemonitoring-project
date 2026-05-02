@@ -37,6 +37,8 @@ namespace CortriumBLE
     {
         int count = 0;
 
+        private List<(DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(DateTime, int, double, double, double)>();
+
         public IBluetoothLE bluetoothLE { get; private set; }
         public IAdapter adapter { get; private set; }
 
@@ -424,8 +426,25 @@ namespace CortriumBLE
                             Console.WriteLine($"Data ECG1: {ecg1}");
                             // Add each new point with a timestamp based on 256 Hz sample rate
 
+
                             //insert data into database
-                            _ = InsertEcgDataAsync(ecg1);
+                            ecgBuffer.Add((
+                            DateTime.UtcNow,
+                            ecg1,
+                            HeartRate,
+                            CSI,
+                            ModCSI
+                        ));
+
+                        if (ecgBuffer.Count >= 50) // hopefully batching in portions of 50 will fix it
+                        {
+                            var batchToSend = new List<(DateTime, int, double, double, double)>(ecgBuffer);
+                            ecgBuffer.Clear();
+
+                            _ = InsertBatchAsync(batchToSend);
+                        }   
+
+
 
                             var pointTime = DateTime.Now; //.AddMilliseconds(3.9); // Rough interval for 256  is 3.9 - but for downsampling by 4 - it must be 3.9*4 = 15.6Hz
 
@@ -599,37 +618,45 @@ namespace CortriumBLE
 
 
         //In real life NEVER hardcode your credentials in code and EVEN MORE NEVER send them over the web like that. 
-        //but we have a free package and this is just a demonstration so we wont care this time.
-        private async Task InsertEcgDataAsync(int ecg1)
+        //but we have a free package and this is just a demonstration so we wont care this time. 
+        private async Task InsertBatchAsync(List<(DateTime ts, int ecg, double hr, double csi, double modcsi)> batch)
         {
             try
             {
                 var connectionString =
                     "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
-                    "Database=telemonitoring;" +
+                    "Database=ecgdb;" +
                     "User=admin;" +
                     "Password=telemonitoring123;";
 
-                using var connection = new MySqlConnection(connectionString);
+                using var connection = new MySqlConnector.MySqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                var query = @"INSERT INTO ecg_data 
+                using var cmd = connection.CreateCommand();
+
+                var values = new List<string>();
+
+                for (int i = 0; i < batch.Count; i++)
+                {
+                    values.Add($"(@ts{i}, @ecg{i}, @hr{i}, @csi{i}, @mod{i})");
+
+                    cmd.Parameters.AddWithValue($"@ts{i}", batch[i].ts);
+                    cmd.Parameters.AddWithValue($"@ecg{i}", batch[i].ecg);
+                    cmd.Parameters.AddWithValue($"@hr{i}", batch[i].hr);
+                    cmd.Parameters.AddWithValue($"@csi{i}", batch[i].csi);
+                    cmd.Parameters.AddWithValue($"@mod{i}", batch[i].modcsi);
+                }
+
+                cmd.CommandText = $@"
+                    INSERT INTO ecg_data 
                     (timestamp, ecg_value, heart_rate, csi, mod_csi)
-                    VALUES (@timestamp, @ecg, @hr, @csi, @modcsi)";
-
-                using var cmd = new MySqlCommand(query, connection);
-
-                cmd.Parameters.AddWithValue("@timestamp", DateTime.UtcNow);
-                cmd.Parameters.AddWithValue("@ecg", ecg1);
-                cmd.Parameters.AddWithValue("@hr", HeartRate);
-                cmd.Parameters.AddWithValue("@csi", CSI);
-                cmd.Parameters.AddWithValue("@modcsi", ModCSI);
+                    VALUES {string.Join(",", values)}";
 
                 await cmd.ExecuteNonQueryAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine("DB Insert Error: " + ex.Message);
+                Console.WriteLine("Batch insert error: " + ex.Message);
             }
         }
 
