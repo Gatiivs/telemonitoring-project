@@ -625,7 +625,7 @@ namespace CortriumBLE
             {
                 var connectionString =
                     "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
-                    "Database=ecgdb;" +
+                    "Database=telemonitoring;" +
                     "User=admin;" +
                     "Password=telemonitoring123;";
 
