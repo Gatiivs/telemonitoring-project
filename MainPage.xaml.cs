@@ -19,6 +19,8 @@ using CortriumBLE.SignalProcessing;
 using System.Linq.Expressions;
 //using Windows.ApplicationModel.Background;
 
+using MySqlConnector;
+
 namespace CortriumBLE
 {
 
@@ -421,6 +423,10 @@ namespace CortriumBLE
                             //Console.WriteLine($"Data: ECGChannel1: {ecgData.ECGChannel1[k]}, ECGChannel2: {ecgData.ECGChannel2[k]}, ECGChannel3: {ecgData.ECGChannel3[k]}");
                             Console.WriteLine($"Data ECG1: {ecg1}");
                             // Add each new point with a timestamp based on 256 Hz sample rate
+
+                            //insert data into database
+                            _ = InsertEcgDataAsync(ecg1);
+
                             var pointTime = DateTime.Now; //.AddMilliseconds(3.9); // Rough interval for 256  is 3.9 - but for downsampling by 4 - it must be 3.9*4 = 15.6Hz
 
                             _values.Add(new DateTimePoint(pointTime, ecg1));
@@ -590,6 +596,43 @@ namespace CortriumBLE
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+
+
+        //In real life NEVER hardcode your credentials in code and EVEN MORE NEVER send them over the web like that. 
+        //but we have a free package and this is just a demonstration so we wont care this time.
+        private async Task InsertEcgDataAsync(int ecg1)
+        {
+            try
+            {
+                var connectionString =
+                    "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
+                    "Database=telemonitoring;" +
+                    "User=admin;" +
+                    "Password=telemonitoring123;";
+
+                using var connection = new MySqlConnection(connectionString);
+                await connection.OpenAsync();
+
+                var query = @"INSERT INTO ecg_data 
+                    (timestamp, ecg_value, heart_rate, csi, mod_csi)
+                    VALUES (@timestamp, @ecg, @hr, @csi, @modcsi)";
+
+                using var cmd = new MySqlCommand(query, connection);
+
+                cmd.Parameters.AddWithValue("@timestamp", DateTime.UtcNow);
+                cmd.Parameters.AddWithValue("@ecg", ecg1);
+                cmd.Parameters.AddWithValue("@hr", HeartRate);
+                cmd.Parameters.AddWithValue("@csi", CSI);
+                cmd.Parameters.AddWithValue("@modcsi", ModCSI);
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("DB Insert Error: " + ex.Message);
+            }
+        }
+
 
     }
 
