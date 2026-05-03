@@ -38,7 +38,7 @@ namespace CortriumBLE
         int count = 0;
 
         private string sessionId = Guid.NewGuid().ToString();
-        private List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(DateTime, int, double, double, double)>();
+        private List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(string ,DateTime, int, double, double, double)>();
 
         public IBluetoothLE bluetoothLE { get; private set; }
         public IAdapter adapter { get; private set; }
@@ -641,8 +641,9 @@ namespace CortriumBLE
 
                 for (int i = 0; i < batch.Count; i++)
                 {
-                    values.Add($"(@ts{i}, @ecg{i}, @hr{i}, @csi{i}, @mod{i})");
+                    values.Add($"(@session{i},@ts{i}, @ecg{i}, @hr{i}, @csi{i}, @mod{i})");
 
+                    cmd.Parameters.AddWithValue($"@session{i}", batch[i].session);
                     cmd.Parameters.AddWithValue($"@ts{i}", batch[i].ts);
                     cmd.Parameters.AddWithValue($"@ecg{i}", batch[i].ecg);
                     cmd.Parameters.AddWithValue($"@hr{i}", batch[i].hr);
@@ -652,7 +653,7 @@ namespace CortriumBLE
 
                 cmd.CommandText = $@"
                     INSERT INTO ecg_data 
-                    (timestamp, ecg_value, heart_rate, csi, mod_csi)
+                    (session_id, timestamp, ecg_value, heart_rate, csi, mod_csi)
                     VALUES {string.Join(",", values)}";
 
                 await cmd.ExecuteNonQueryAsync();
