@@ -434,9 +434,9 @@ namespace CortriumBLE
                             sessionId,
                             DateTime.UtcNow,
                             ecg1,
-                            HeartRate,
-                            CSI,
-                            ModCSI
+                            SafeValue(HeartRate),
+                            SafeValue(CSI),
+                            SafeValue(ModCSI)
                         ));
 
                         if (ecgBuffer.Count >= 50) // hopefully batching in portions of 50 will fix it
@@ -662,6 +662,15 @@ namespace CortriumBLE
             {
                 Console.WriteLine("Batch insert error: " + ex.Message);
             }
+        }
+
+            //it appears sometimes in some calculations we get NaN and that breaks adding things to the database
+        private double SafeValue(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return 0; // or null if you prefer
+
+            return value;
         }
 
 
