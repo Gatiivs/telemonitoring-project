@@ -17,7 +17,10 @@ using LiveChartsCore.SkiaSharpView.Drawing.Geometries;
 using CortriumBLE.Utilities;
 using CortriumBLE.SignalProcessing;
 using System.Linq.Expressions;
+using CortriumBLE.Services;
+
 //using Windows.ApplicationModel.Background;
+
 
 namespace CortriumBLE
 {
@@ -64,7 +67,9 @@ namespace CortriumBLE
         private readonly string currentSessionId = Guid.NewGuid().ToString();
 
         private AccelerometerService accelerometerService;
-
+        private readonly ContextAwarenessTestingService contextTest = new();
+        private readonly ContextLogService contextLog = new();
+        private readonly ContextAwarenessService contextAwarenessService = new();
         public ObservableCollection<ISeries> Series
         {
             get => _series;
@@ -427,6 +432,16 @@ namespace CortriumBLE
 
                     // GET accelerometer batch
                     var accelBatch = accelerometerService.GetBatchAndClear();
+                    var contextResult = contextTest.Analyze(accelBatch);
+                    //Réka
+                    contextLog.AddRow(
+                        DateTime.Now,
+                        contextResult.ActivityState.ToString(),
+                        contextResult.MotionScore
+                    );
+                    //Réka end
+
+Console.WriteLine(contextResult.Explanation);
 
                     if (accelBatch.Count > 0 && ecgWriter != null)
                     {
@@ -497,6 +512,22 @@ namespace CortriumBLE
 
                                         if (CSI > MaxCSI && CSI < 10000000)
                                             MaxCSI = CSI;
+                                            // Réka ECG detection → THEN check movement → THEN explain result
+
+                                        var contextDecision = contextAwarenessService.Analyze(
+                                            csi: CSI,
+                                            heartRate: HeartRate,
+                                            accelerometerBatch: accelBatch
+                                        );
+
+                                        Console.WriteLine(
+                                            $"Context: {contextDecision.Activity}, " +
+                                            $"Motion: {contextDecision.MotionScore:F3}, " +
+                                            $"Decision: {contextDecision.Reason}"
+                                        );
+
+                                        Information = contextDecision.Reason;
+                                        // Réka end
                                     }
                                 }
                                 catch (Exception ex)
