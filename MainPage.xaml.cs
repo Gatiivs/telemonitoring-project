@@ -6,10 +6,20 @@ using Plugin.BLE.Abstractions.Contracts;
 using Plugin.BLE.Abstractions.EventArgs;
 using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
+using CortriumBLE.SignalProcessing;
+using CortriumBLE.Utilities;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Drawing.Geometries;
 using LiveChartsCore.SkiaSharpView.Painting;
+//using Windows.ApplicationModel.Background;
+
+using MySqlConnector;
+using Plugin.BLE;
+using Plugin.BLE.Abstractions;
+using Plugin.BLE.Abstractions.Contracts;
+using Plugin.BLE.Abstractions.EventArgs;
 using SkiaSharp;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -18,6 +28,7 @@ using CortriumBLE.Utilities;
 using CortriumBLE.SignalProcessing;
 using System.Linq.Expressions;
 //using Windows.ApplicationModel.Background;
+using System.Text.RegularExpressions;
 
 using MySqlConnector;
 
@@ -36,6 +47,8 @@ namespace CortriumBLE
     public partial class MainPage : ContentPage, INotifyPropertyChanged
     {
         int count = 0;
+
+        private AccelerometerService accelerometerService;
 
         private string sessionId = Guid.NewGuid().ToString();
         private List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(string ,DateTime, int, double, double, double)>();
@@ -261,10 +274,14 @@ namespace CortriumBLE
         {
             sessionId = Guid.NewGuid().ToString();
 
+            accelerometerService = new AccelerometerService(sessionId);
+
+            accelerometerService.ToggleAccelerometer();
+
             //_values.Clear(); // Clear old values
             //_values.AddRange(GenerateSampleData(10)); // Generate new data
 
-           //pdateChart();
+            //pdateChart();
 
             InitBluetooth();
             count++;
@@ -672,6 +689,76 @@ namespace CortriumBLE
 
             return value;
         }
+
+
+        //In real life NEVER hardcode your credentials in code and EVEN MORE NEVER send them over the web like that. 
+        //but we have a free package and this is just a demonstration so we wont care this time. 
+
+        private async Task InsertAccelerometerBatchAsync(List<AccelerometerData> batch)
+        {
+            try
+            {
+                var connectionString =
+                    "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
+                    "Database=telemonitoring;" +
+                    "User=admin;" +
+                    "Password=telemonitoring123;";
+
+                using var connection = new MySqlConnection(connectionString);
+
+                await connection.OpenAsync();
+
+                using var cmd = connection.CreateCommand();
+
+                var values = new List<string>();
+
+                for (int i = 0; i < batch.Count; i++)
+                {
+                    values.Add(
+                        $"(@session{i}, @ts{i}, @x{i}, @y{i}, @z{i})");
+
+                    cmd.Parameters.AddWithValue(
+                        $"@session{i}",
+                        batch[i].SessionId);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@ts{i}",
+                        batch[i].Timestamp);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@x{i}",
+                        batch[i].X);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@y{i}",
+                        batch[i].Y);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@z{i}",
+                        batch[i].Z);
+                }
+
+                cmd.CommandText = $@"
+            INSERT INTO accelerometer_data
+            (session_id, timestamp, x, y, z)
+            VALUES {string.Join(",", values)}";
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    "Accelerometer batch insert error: " + ex.Message);
+            }
+        }
+
+
+
+
+
+
+
+
 
 
     }
