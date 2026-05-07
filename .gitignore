@@ -363,3 +363,4 @@ MigrationBackup/
 FodyWeavers.xsd
 CortriumBLE.csproj.lscache
 CortriumBLE.csproj.lscache
+*.DS_Store

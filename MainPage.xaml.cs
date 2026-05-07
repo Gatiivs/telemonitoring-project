@@ -32,6 +32,8 @@ using System.Text.RegularExpressions;
 
 using MySqlConnector;
 
+//TODO for now session IDs of ECG and accelometer dont match and they should
+
 namespace CortriumBLE
 {
 
@@ -462,8 +464,15 @@ namespace CortriumBLE
                             ecgBuffer.Clear();
 
                             _ = InsertBatchAsync(batchToSend);
-                        }   
+                        }
 
+                            
+                        var accelBatch = accelerometerService.GetBatchAndClear();
+
+                        if (accelBatch.Count >= 100)
+                        {
+                            _ = InsertAccelerometerBatchAsync(accelBatch);
+                        }
 
 
                             var pointTime = DateTime.Now; //.AddMilliseconds(3.9); // Rough interval for 256  is 3.9 - but for downsampling by 4 - it must be 3.9*4 = 15.6Hz
