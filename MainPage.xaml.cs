@@ -50,6 +50,11 @@ namespace CortriumBLE
     {
         int count = 0;
 
+        readonly string connectionString =
+            "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
+            "Database=telemonitoring;" +
+            "User=admin;" +
+            "Password=telemonitoring123;";
         private AccelerometerService accelerometerService;
 
         private string sessionId = Guid.NewGuid().ToString();
@@ -473,6 +478,7 @@ namespace CortriumBLE
                         if (accelBatch.Count >= 100)
                         {
                             _ = InsertAccelerometerBatchAsync(accelBatch);
+                            accelBatch.Clear();
                         }
 
 
@@ -653,11 +659,6 @@ namespace CortriumBLE
         {
             try
             {
-                var connectionString =
-                    "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
-                    "Database=telemonitoring;" +
-                    "User=admin;" +
-                    "Password=telemonitoring123;";
 
                 using var connection = new MySqlConnector.MySqlConnection(connectionString);
                 await connection.OpenAsync();
@@ -708,11 +709,7 @@ namespace CortriumBLE
         {
             try
             {
-                var connectionString =
-                    "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
-                    "Database=telemonitoring;" +
-                    "User=admin;" +
-                    "Password=telemonitoring123;";
+
 
                 using var connection = new MySqlConnection(connectionString);
 

@@ -55,12 +55,11 @@ namespace CortriumBLE
             }
         }
 
-        public List<AccelerometerData> GetBatchAndClear()
+        public List<AccelerometerData> GetBatch()
         {
             lock (_lock)
             {
-                var batchCopy = new List<AccelerometerData>(_accelBatch);
-                _accelBatch.Clear();
+                var batchCopy = new List<AccelerometerData>(_accelBatch); 
                 return batchCopy;
             }
         }
@@ -69,7 +68,7 @@ namespace CortriumBLE
         //we can remove these 2 later
         public void ReadData()
         {
-            var batch = GetBatchAndClear();
+            var batch = GetBatch();
 
             if (batch.Count > 0)
             {
@@ -86,7 +85,7 @@ namespace CortriumBLE
 
     public class AccelerometerData
     {
-        public string SessionId { get; set; }
+        public required string SessionId { get; set; }
         public double X { get; set; }
         public double Y { get; set; }
         public double Z { get; set; }
