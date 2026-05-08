@@ -473,8 +473,8 @@ namespace CortriumBLE
                         }
 
                             
-                         accelBatch = accelerometerService.GetBatchAndClear();
-
+                         accelBatch = accelerometerService.GetBatch();
+                            //comparison with null
                         if (accelBatch.Count >= 100)
                         {
                             _ = InsertAccelerometerBatchAsync(accelBatch);
