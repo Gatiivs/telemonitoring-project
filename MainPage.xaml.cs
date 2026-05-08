@@ -98,6 +98,7 @@ namespace CortriumBLE
         private double csi;
         private double modCsi;
         private double maxCSI;
+        private List<AccelerometerData> accelBatch;
 
         public Axis[] XAxes
         {
@@ -467,7 +468,7 @@ namespace CortriumBLE
                         }
 
                             
-                        var accelBatch = accelerometerService.GetBatchAndClear();
+                         accelBatch = accelerometerService.GetBatchAndClear();
 
                         if (accelBatch.Count >= 100)
                         {
