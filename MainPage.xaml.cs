@@ -16,21 +16,11 @@ using LiveChartsCore.SkiaSharpView.Painting;
 //using Windows.ApplicationModel.Background;
 
 using MySqlConnector;
-using Plugin.BLE;
-using Plugin.BLE.Abstractions;
-using Plugin.BLE.Abstractions.Contracts;
-using Plugin.BLE.Abstractions.EventArgs;
 using SkiaSharp;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
-using LiveChartsCore.SkiaSharpView.Drawing.Geometries;
-using CortriumBLE.Utilities;
-using CortriumBLE.SignalProcessing;
 using System.Linq.Expressions;
 //using Windows.ApplicationModel.Background;
-using System.Text.RegularExpressions;
 
-using MySqlConnector;
 
 //TODO for now session IDs of ECG and accelometer dont match and they should
 
@@ -282,9 +272,18 @@ namespace CortriumBLE
         {
             sessionId = Guid.NewGuid().ToString();
 
-            accelerometerService = new AccelerometerService(sessionId);
+            try
+            {
+                accelerometerService = new AccelerometerService(sessionId);
 
-            accelerometerService.ToggleAccelerometer();
+                accelerometerService.ToggleAccelerometer();
+
+                Console.WriteLine("Accelerometer started");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Accelerometer init failed: {ex}");
+            }
 
             //_values.Clear(); // Clear old values
             //_values.AddRange(GenerateSampleData(10)); // Generate new data
@@ -446,6 +445,26 @@ namespace CortriumBLE
                     if (ecgWriter != null)
                         await ecgWriter.WriteEcgValueAsync(ecg1);
 
+                    if (accelerometerService != null)
+                    {
+                        accelBatch = accelerometerService.GetBatch();
+                        Console.WriteLine($"Accel batch count: {accelBatch?.Count}");
+
+                        if (accelBatch != null && accelBatch.Count >= 100)
+                        {
+                            var batchCopy = new List<AccelerometerData>(accelBatch);
+
+                            accelBatch.Clear();
+
+                            _ = Task.Run(async () =>
+                            {
+                                await InsertAccelerometerBatchAsync(batchCopy);
+                            });
+                        }
+                    }
+
+
+
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
                         try {
@@ -472,14 +491,8 @@ namespace CortriumBLE
                             _ = InsertBatchAsync(batchToSend);
                         }
 
-                            
-                         accelBatch = accelerometerService.GetBatch();
-                            //comparison with null
-                        if (accelBatch.Count >= 100)
-                        {
-                            _ = InsertAccelerometerBatchAsync(accelBatch);
-                            accelBatch.Clear();
-                        }
+
+
 
 
                             var pointTime = DateTime.Now; //.AddMilliseconds(3.9); // Rough interval for 256  is 3.9 - but for downsampling by 4 - it must be 3.9*4 = 15.6Hz
@@ -758,14 +771,6 @@ namespace CortriumBLE
                     "Accelerometer batch insert error: " + ex.Message);
             }
         }
-
-
-
-
-
-
-
-
 
 
     }
