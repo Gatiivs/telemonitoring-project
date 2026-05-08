@@ -94,6 +94,7 @@ namespace CortriumBLE
         private double modCsi;
         private double maxCSI;
         private List<AccelerometerData> accelBatch;
+        private bool accelInsertRunning = false;
 
         public Axis[] XAxes
         {
@@ -448,17 +449,35 @@ namespace CortriumBLE
                     if (accelerometerService != null)
                     {
                         accelBatch = accelerometerService.GetBatch();
+
                         Console.WriteLine($"Accel batch count: {accelBatch?.Count}");
 
-                        if (accelBatch != null && accelBatch.Count >= 100)
+                        if (accelBatch != null &&
+                            accelBatch.Count >= 200 &&
+                            !accelInsertRunning)
                         {
+                            accelInsertRunning = true;
+
+                            Console.WriteLine($"Sending accel batch: {accelBatch.Count}");
+
                             var batchCopy = new List<AccelerometerData>(accelBatch);
 
                             accelBatch.Clear();
 
                             _ = Task.Run(async () =>
                             {
-                                await InsertAccelerometerBatchAsync(batchCopy);
+                                try
+                                {
+                                    await InsertAccelerometerBatchAsync(batchCopy);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Accel insert task error: {ex}");
+                                }
+                                finally
+                                {
+                                    accelInsertRunning = false;
+                                }
                             });
                         }
                     }
@@ -764,6 +783,7 @@ namespace CortriumBLE
             VALUES {string.Join(",", values)}";
 
                 await cmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"Inserted accel batch size: {batch.Count}");
             }
             catch (Exception ex)
             {
