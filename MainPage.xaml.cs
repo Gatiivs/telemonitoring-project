@@ -6,20 +6,23 @@ using Plugin.BLE.Abstractions.Contracts;
 using Plugin.BLE.Abstractions.EventArgs;
 using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
+using CortriumBLE.SignalProcessing;
+using CortriumBLE.Utilities;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
-using LiveChartsCore.SkiaSharpView.Painting;
-using SkiaSharp;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using LiveChartsCore.SkiaSharpView.Drawing.Geometries;
-using CortriumBLE.Utilities;
-using CortriumBLE.SignalProcessing;
-using System.Linq.Expressions;
+using LiveChartsCore.SkiaSharpView.Painting;
 //using Windows.ApplicationModel.Background;
 
 using MySqlConnector;
+using SkiaSharp;
+using System.ComponentModel;
+using System.Linq.Expressions;
+//using Windows.ApplicationModel.Background;
+
+
+//TODO for now session IDs of ECG and accelometer dont match and they should
 
 namespace CortriumBLE
 {
@@ -36,6 +39,13 @@ namespace CortriumBLE
     public partial class MainPage : ContentPage, INotifyPropertyChanged
     {
         int count = 0;
+
+        readonly string connectionString =
+            "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
+            "Database=telemonitoring;" +
+            "User=admin;" +
+            "Password=telemonitoring123;";
+        private AccelerometerService accelerometerService;
 
         private string sessionId = Guid.NewGuid().ToString();
         private List<(string session, DateTime ts, int ecg, double hr, double csi, double modcsi)> ecgBuffer  = new List<(string ,DateTime, int, double, double, double)>();
@@ -83,6 +93,8 @@ namespace CortriumBLE
         private double csi;
         private double modCsi;
         private double maxCSI;
+        private List<AccelerometerData> accelBatch;
+        private bool accelInsertRunning = false;
 
         public Axis[] XAxes
         {
@@ -261,10 +273,23 @@ namespace CortriumBLE
         {
             sessionId = Guid.NewGuid().ToString();
 
+            try
+            {
+                accelerometerService = new AccelerometerService(sessionId);
+
+                accelerometerService.ToggleAccelerometer();
+
+                Console.WriteLine("Accelerometer started");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Accelerometer init failed: {ex}");
+            }
+
             //_values.Clear(); // Clear old values
             //_values.AddRange(GenerateSampleData(10)); // Generate new data
 
-           //pdateChart();
+            //pdateChart();
 
             InitBluetooth();
             count++;
@@ -421,6 +446,44 @@ namespace CortriumBLE
                     if (ecgWriter != null)
                         await ecgWriter.WriteEcgValueAsync(ecg1);
 
+                    if (accelerometerService != null)
+                    {
+                        accelBatch = accelerometerService.GetBatch();
+
+                        Console.WriteLine($"Accel batch count: {accelBatch?.Count}");
+
+                        if (accelBatch != null &&
+                            accelBatch.Count >= 200 &&
+                            !accelInsertRunning)
+                        {
+                            accelInsertRunning = true;
+
+                            Console.WriteLine($"Sending accel batch: {accelBatch.Count}");
+
+                            var batchCopy = new List<AccelerometerData>(accelBatch);
+
+                            accelBatch.Clear();
+
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await InsertAccelerometerBatchAsync(batchCopy);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Accel insert task error: {ex}");
+                                }
+                                finally
+                                {
+                                    accelInsertRunning = false;
+                                }
+                            });
+                        }
+                    }
+
+
+
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
                         try {
@@ -445,7 +508,9 @@ namespace CortriumBLE
                             ecgBuffer.Clear();
 
                             _ = InsertBatchAsync(batchToSend);
-                        }   
+                        }
+
+
 
 
 
@@ -626,11 +691,6 @@ namespace CortriumBLE
         {
             try
             {
-                var connectionString =
-                    "Server=ecg-database.c3ucqqck4yel.eu-north-1.rds.amazonaws.com;" +
-                    "Database=telemonitoring;" +
-                    "User=admin;" +
-                    "Password=telemonitoring123;";
 
                 using var connection = new MySqlConnector.MySqlConnection(connectionString);
                 await connection.OpenAsync();
@@ -671,6 +731,65 @@ namespace CortriumBLE
                 return 0; // or null if you prefer
 
             return value;
+        }
+
+
+        //In real life NEVER hardcode your credentials in code and EVEN MORE NEVER send them over the web like that. 
+        //but we have a free package and this is just a demonstration so we wont care this time. 
+
+        private async Task InsertAccelerometerBatchAsync(List<AccelerometerData> batch)
+        {
+            try
+            {
+
+
+                using var connection = new MySqlConnection(connectionString);
+
+                await connection.OpenAsync();
+
+                using var cmd = connection.CreateCommand();
+
+                var values = new List<string>();
+
+                for (int i = 0; i < batch.Count; i++)
+                {
+                    values.Add(
+                        $"(@session{i}, @ts{i}, @x{i}, @y{i}, @z{i})");
+
+                    cmd.Parameters.AddWithValue(
+                        $"@session{i}",
+                        batch[i].SessionId);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@ts{i}",
+                        batch[i].Timestamp);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@x{i}",
+                        batch[i].X);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@y{i}",
+                        batch[i].Y);
+
+                    cmd.Parameters.AddWithValue(
+                        $"@z{i}",
+                        batch[i].Z);
+                }
+
+                cmd.CommandText = $@"
+            INSERT INTO accelerometer_data
+            (session_id, timestamp, x, y, z)
+            VALUES {string.Join(",", values)}";
+
+                await cmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"Inserted accel batch size: {batch.Count}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    "Accelerometer batch insert error: " + ex.Message);
+            }
         }
 
 
